@@ -1,0 +1,14 @@
+{
+  "name": "iade-iptal-takip",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync.mjs",
+    "sync:dry": "DRY_RUN=1 node scripts/sync.mjs"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@supabase/supabase-js": "2.45.4",
+    "fast-xml-parser": "4.5.0"
+  }
+}
