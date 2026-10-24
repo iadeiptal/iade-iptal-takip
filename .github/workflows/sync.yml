@@ -1,0 +1,26 @@
+name: Entegra XML senkron
+
+on:
+  schedule:
+    - cron: "0 5,7,9,11,13,15,17,19 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: senkron
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --omit=dev --no-audit --no-fund
+      - run: node scripts/sync.mjs
+        env:
+          XML_URL: ${{ secrets.XML_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
