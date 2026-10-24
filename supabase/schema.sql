@@ -53,12 +53,14 @@ create table if not exists public.kayitlar (
   neden           text,
   not_secim       text,
   not_metin       text,
+  kargo_tutari    numeric,
 
   silindi         boolean not null default false,
   olusturma       timestamptz not null default now(),
   guncelleme      timestamptz not null default now(),
   guncelleyen     text
 );
+alter table public.kayitlar add column if not exists kargo_tutari numeric;  -- sonradan eklenen alan
 create index if not exists kayitlar_excel_tarihi_idx on public.kayitlar (excel_tarihi);
 create index if not exists kayitlar_siparis_no_idx on public.kayitlar (siparis_no);
 

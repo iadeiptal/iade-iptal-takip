@@ -69,7 +69,7 @@ input,select{font:400 13px var(--f-body);color:var(--fg);background:var(--surfac
 .panel h2{font-family:var(--f-display);font-size:15px;font-weight:600;margin:0;padding:12px 16px;border-bottom:1px solid var(--line-soft);display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
 .panel h2 small{font:400 12px var(--f-body);color:var(--muted)}
 .tablebox{overflow:auto;max-height:72vh;border-radius:0 0 10px 10px}
-table.ledger{border-collapse:separate;border-spacing:0;width:100%;min-width:1720px}
+table.ledger{border-collapse:separate;border-spacing:0;width:100%;min-width:1830px}
 .ledger th{position:sticky;top:0;background:var(--sunk);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;padding:8px;border-bottom:1px solid var(--line);z-index:1;white-space:nowrap}
 .ledger td{padding:4px 5px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
 .ledger tr.missing td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
@@ -81,6 +81,13 @@ table.ledger{border-collapse:separate;border-spacing:0;width:100%;min-width:1720
 .ledger td.mono input{font-family:var(--f-mono);font-size:12.5px}
 .ledger td.num input,.ledger td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--f-mono);font-size:12.5px}
 .ledger td.ro{padding:5px 11px;color:var(--muted);white-space:nowrap}
+.ledger tfoot td{white-space:nowrap;position:sticky;bottom:0;background:var(--sunk);border-top:2px solid var(--line);border-bottom:0;padding:9px 11px;font-weight:600;font-variant-numeric:tabular-nums;z-index:1}
+.ledger tfoot td.num{font-family:var(--f-mono);font-size:12.5px;color:var(--fg)}
+.ledger tfoot .lbl{font-size:11px}
+.ledger th.sorted::after{content:" ↑";color:var(--accent)}
+.range{display:flex;gap:6px;align-items:center}
+.range span{color:var(--faint)}
+.range input{width:140px}
 .cellstack{display:flex;flex-direction:column;gap:2px}
 .cellstack input{font-size:12px;color:var(--muted)}
 .hint{font-size:11px;color:var(--muted);padding:0 6px;white-space:nowrap}
@@ -173,6 +180,7 @@ p.note{font-size:12.5px;color:var(--muted);margin:0;max-width:75ch}
   <section id="filters" class="toolbar">
     <div class="field" id="fDay"><label for="inDay">Gün (Excel Tarihi)</label><input type="date" id="inDay"></div>
     <div class="field" id="fMonth" hidden><label for="inMonth">Ay (Excel Tarihi)</label><input type="month" id="inMonth"></div>
+    <div class="field"><label for="inSdFrom">Sipariş Tarihi</label><div class="range"><input type="date" id="inSdFrom" aria-label="Sipariş tarihi başlangıç"><span>–</span><input type="date" id="inSdTo" aria-label="Sipariş tarihi bitiş"><button class="btn" id="btnSdClear" type="button" title="Sipariş tarihi filtresini temizle" hidden>Temizle</button></div></div>
     <div class="field grow"><label for="inSearch">Ara</label><input type="search" id="inSearch" placeholder="Sipariş no, ürün, not…"></div>
     <div class="field"><label for="inPazarF">Pazar Yeri</label><select id="inPazarF"></select></div>
     <div class="field"><label for="inTurF">İptal/İade</label><select id="inTurF"></select></div>
@@ -203,10 +211,11 @@ p.note{font-size:12.5px;color:var(--muted);margin:0;max-width:75ch}
           <th style="width:150px">Sipariş No</th><th style="width:125px">Pazar Yeri</th><th style="width:150px">İptal/İade</th>
           <th style="width:140px">Kaynak</th><th style="width:190px">İptal/İade Nedeni</th><th style="width:280px">Ürün İsmi</th>
           <th style="width:64px;text-align:right">Adet</th><th style="width:92px;text-align:right">Birim Fiyat</th><th style="width:96px;text-align:right">Tutar</th>
-          <th style="width:128px">Excel Tarihi</th><th style="width:100px">Sipariş Tarihi</th>
-          <th style="width:200px">Not</th><th style="width:54px"></th>
+          <th style="width:128px">Excel Tarihi</th><th style="width:110px" class="sorted" title="Liste sipariş tarihine göre eskiden yeniye sıralıdır">Sipariş Tarihi</th>
+          <th style="width:200px">Not</th><th style="width:104px;text-align:right">Kargo Tutarı</th><th style="width:54px"></th>
         </tr></thead>
         <tbody id="tbody"></tbody>
+        <tfoot id="tfoot"></tfoot>
       </table>
       <div id="tableEmpty" class="empty-state" hidden></div>
     </div>
@@ -260,7 +269,7 @@ function showErr(m){const e=$("#errNote"); e.hidden=!m; e.textContent=m||"";}
 
 const LIST_LABELS={pazar:"Pazar Yeri",tur:"İptal/İade",kaynak:"Kaynak",neden:"İptal/İade Nedeni",not:"Not seçenekleri"};
 const LIST_KEYS=Object.keys(LIST_LABELS);
-const EDITABLE=["siparis_no","pazar_yeri","tur","kaynak","neden","urun_adi","adet","birim_fiyat","excel_tarihi","siparis_tarihi","not_secim","not_metin"];
+const EDITABLE=["siparis_no","pazar_yeri","tur","kaynak","neden","urun_adi","adet","birim_fiyat","excel_tarihi","siparis_tarihi","not_secim","not_metin","kargo_tutari"];
 
 /* ================= durum ================= */
 const today=ymd(new Date());
@@ -323,7 +332,7 @@ function demoApi(){
       const u=U[rnd(U.length)], t=T[rnd(T.length)], gap=t==="İptal"?rnd(2):3+rnd(10);
       const sd=new Date(dt); sd.setDate(dt.getDate()-gap);
       data.push({id:id++,kaynak_tipi:"otomatik",siparis_no:String(4260000000+rnd(999999)),pazar_yeri:P[rnd(P.length)],urun_adi:u[0],adet:1+(rnd(4)===0?1:0),birim_fiyat:u[1],
-        excel_tarihi:ymd(dt),siparis_tarihi:ymd(sd),xml_durum:"İade İptal",tur:t,kaynak:t?K[rnd(K.length)]:"",neden:t?N[rnd(N.length)]:"",not_secim:t&&rnd(3)===0?"Entegrası Yapıldı":"",not_metin:"",silindi:false});
+        excel_tarihi:ymd(dt),siparis_tarihi:ymd(sd),xml_durum:"İade İptal",tur:t,kaynak:t?K[rnd(K.length)]:"",neden:t?N[rnd(N.length)]:"",not_secim:t&&rnd(3)===0?"Entegrası Yapıldı":"",not_metin:"",kargo_tutari:(t==="İade"||t==="Değişim")&&rnd(2)?[54.99,67.5,89.9][rnd(3)]:null,silindi:false});
     }
   }
   data[0] && (data[0].not_metin="Müşteri kargo ücretini ödemiş");
@@ -414,15 +423,18 @@ function fillFilters(){
 }
 const isMissing=r=>!r.tur||!r.kaynak||!r.neden;
 function filtered(){
+  const sdFrom=$("#inSdFrom").value, sdTo=$("#inSdTo").value;
   const q=norm($("#inSearch").value), pz=$("#inPazarF").value, tr=$("#inTurF").value, miss=$("#inMissing").checked;
   return rows.filter(r=>{
     if(view==="gunluk"&&r.excel_tarihi!==day) return false;
     if(pz&&r.pazar_yeri!==pz) return false;
     if(tr==="__bos"? !!r.tur : (tr&&r.tur!==tr)) return false;
     if(miss&&!isMissing(r)) return false;
+    if(sdFrom&&(!r.siparis_tarihi||r.siparis_tarihi<sdFrom)) return false;
+    if(sdTo&&(!r.siparis_tarihi||r.siparis_tarihi>sdTo)) return false;
     if(q&&!norm([r.siparis_no,r.urun_adi,r.not_secim,r.not_metin,r.neden,r.kaynak,r.pazar_yeri,r.tur].join(" ")).includes(q)) return false;
     return true;
-  }).sort((a,b)=>(a.excel_tarihi||"").localeCompare(b.excel_tarihi||"")||String(a.siparis_no).localeCompare(String(b.siparis_no))||a.id-b.id);
+  }).sort((a,b)=>(a.siparis_tarihi||"9999").localeCompare(b.siparis_tarihi||"9999")||String(a.siparis_no).localeCompare(String(b.siparis_no))||a.id-b.id);
 }
 
 /* ================= çizim ================= */
@@ -450,6 +462,7 @@ function renderStrip(list){
     `<div class="stat iade"><span class="lbl">İade</span><b>${ia.length}</b><small>${esc(money(sum(ia)))}</small></div>`+
     `<div class="stat"><span class="lbl">Değişim, eksik ve diğer</span><b>${dg.length}</b><small>${esc(money(sum(dg)))}</small></div>`+
     `<div class="stat ${bos.length?"warn":""}"><span class="lbl">Türü seçilmemiş</span><b>${bos.length}</b><small>${esc(money(sum(bos)))}</small></div>`+
+    `<div class="stat"><span class="lbl">Kargo tutarı</span><b>${esc(money(list.reduce((s,r)=>s+(Number(r.kargo_tutari)||0),0)))}</b><small>${list.filter(r=>Number(r.kargo_tutari)).length} satırda girildi</small></div>`+
     `<div class="stat ${miss?"warn":""}"><span class="lbl">Bilgisi eksik</span><b>${miss}</b><small>tür, kaynak veya neden boş</small></div>`;
 }
 function opts(key,val,ph){
@@ -484,8 +497,13 @@ function renderTable(list){
       <td>${inp("excel_tarihi","date","Excel Tarihi")}</td>
       <td class="ro">${r.kaynak_tipi==="manuel"?inp("siparis_tarihi","date","Sipariş Tarihi"):esc(trDate(r.siparis_tarihi))}</td>
       <td><div class="cellstack"><select data-id="${id}" data-f="not_secim" aria-label="Not">${opts("not",r.not_secim||"","— not seçin —")}</select>${inp("not_metin","text","Serbest not",' placeholder="Serbest not…"')}</div></td>
+      <td class="num"><input type="text" inputmode="decimal" data-id="${id}" data-f="kargo_tutari" value="${r.kargo_tutari==null?"":esc(fmt2(r.kargo_tutari))}" placeholder="—" aria-label="Kargo Tutarı"></td>
       <td>${del}</td></tr>`;
   }).join("");
+  const sumAdet=list.reduce((s,r)=>s+(Number(r.adet)||0),0), sumTutar=list.reduce((s,r)=>s+tutar(r),0), sumKargo=list.reduce((s,r)=>s+(Number(r.kargo_tutari)||0),0);
+  $("#tfoot").innerHTML= list.length ? `<tr><td colspan="6"><span class="lbl">Genel toplam · ${list.length} satır</span></td>
+    <td class="num">${esc(sumAdet.toLocaleString("tr-TR"))}</td><td></td><td class="num">${esc(money(sumTutar))}</td>
+    <td colspan="3"></td><td class="num">${esc(money(sumKargo))}</td><td></td></tr>` : "";
   const e=$("#tableEmpty");
   if(list.length){ e.hidden=true; return; }
   e.hidden=false;
@@ -544,7 +562,7 @@ async function save(id,patch,el){
 $("#tbody").addEventListener("change",e=>{
   const el=e.target, id=+el.dataset.id, f=el.dataset.f; if(!id||!EDITABLE.includes(f)) return;
   let v=el.value.trim();
-  if(f==="adet"||f==="birim_fiyat"){ v=parseMoney(v); }
+  if(f==="adet"||f==="birim_fiyat"||f==="kargo_tutari"){ v=parseMoney(v); }
   else if(v==="") v=null;
   if(f==="excel_tarihi"&&!v){ toast("Excel Tarihi boş olamaz"); el.value=rows.find(x=>x.id===id)?.excel_tarihi||""; return; }
   save(id,{[f]:v},el);
@@ -574,6 +592,8 @@ $("#inHintDays").addEventListener("change",async e=>{
 });
 function persistView(){ try{ if(view!=="ayarlar") localStorage.setItem("iit_view",view); }catch(e){} }
 ["#inSearch","#inPazarF","#inTurF","#inMissing"].forEach(s=>$(s).addEventListener("input",render));
+["#inSdFrom","#inSdTo"].forEach(s=>$(s).addEventListener("change",()=>{ $("#btnSdClear").hidden=!($("#inSdFrom").value||$("#inSdTo").value); render(); }));
+$("#btnSdClear").addEventListener("click",()=>{ $("#inSdFrom").value=""; $("#inSdTo").value=""; $("#btnSdClear").hidden=true; render(); });
 $("#inDay").addEventListener("change",e=>{ if(!e.target.value) return; day=e.target.value; const m=day.slice(0,7); if(m!==month){ month=m; loadMonth(); } else render(); });
 $("#inMonth").addEventListener("change",e=>{ if(!e.target.value) return; month=e.target.value; if(!day.startsWith(month)) day=month+"-01"; loadMonth(); });
 
@@ -588,10 +608,12 @@ $("#btnExport").addEventListener("click",()=>{
   if(typeof XLSX==="undefined"){ toast("Excel kütüphanesi yüklenemedi"); return; }
   const list=view==="ayarlar"?rows:filtered();
   const toD=s=>s?new Date(+s.slice(0,4),+s.slice(5,7)-1,+s.slice(8,10)):"";
-  const aoa=[["Sipariş Numarası","Pazar Yeri","İptal/İade","Kaynak","İptal/İade Nedeni","Ürün İsmi","Adet","Birim Fiyat","Fiyat","Excel Tarihi","Sipariş Tarihi","Not","XML Durumu"]]
-    .concat(list.map(r=>[r.siparis_no||"",r.pazar_yeri||"",r.tur||"",r.kaynak||"",r.neden||"",r.urun_adi||"",r.adet??"",r.birim_fiyat??"",Math.round(tutar(r)*100)/100,toD(r.excel_tarihi),toD(r.siparis_tarihi),[r.not_secim,r.not_metin].filter(Boolean).join(" - "),r.kaynak_tipi==="manuel"?"Manuel":(r.xml_durum||"")]));
+  const aoa=[["Sipariş Numarası","Pazar Yeri","İptal/İade","Kaynak","İptal/İade Nedeni","Ürün İsmi","Adet","Birim Fiyat","Fiyat","Excel Tarihi","Sipariş Tarihi","Not","Kargo Tutarı","XML Durumu"]]
+    .concat(list.map(r=>[r.siparis_no||"",r.pazar_yeri||"",r.tur||"",r.kaynak||"",r.neden||"",r.urun_adi||"",r.adet??"",r.birim_fiyat??"",Math.round(tutar(r)*100)/100,toD(r.excel_tarihi),toD(r.siparis_tarihi),[r.not_secim,r.not_metin].filter(Boolean).join(" - "),r.kargo_tutari??"",r.kaynak_tipi==="manuel"?"Manuel":(r.xml_durum||"")]));
   const ws=XLSX.utils.aoa_to_sheet(aoa,{cellDates:true,dateNF:"dd.mm.yyyy"});
-  ws["!cols"]=[16,14,14,16,30,40,6,10,10,12,12,30,12].map(w=>({wch:w}));
+  const T=["TOPLAM","","","","","",list.reduce((s,r)=>s+(Number(r.adet)||0),0),"",Math.round(list.reduce((s,r)=>s+tutar(r),0)*100)/100,"","","",Math.round(list.reduce((s,r)=>s+(Number(r.kargo_tutari)||0),0)*100)/100,""];
+  XLSX.utils.sheet_add_aoa(ws,[T],{origin:-1});
+  ws["!cols"]=[16,14,14,16,30,40,6,10,10,12,12,30,12,12].map(w=>({wch:w}));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sayfa1");
   const name= view==="gunluk"?`Iade-Iptal ${trDate(day)}.xlsx`:`Iade-Iptal ${MONTHS[+month.slice(5)-1]} ${month.slice(0,4)}.xlsx`;
   XLSX.writeFile(wb,name);
