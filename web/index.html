@@ -141,6 +141,11 @@ p.note{font-size:12.5px;color:var(--muted);margin:0;max-width:75ch}
 .login h1{font-family:var(--f-display);font-size:26px;margin:0}
 .login p{margin:0;color:var(--muted)}
 .login .btn{justify-content:center;padding:11px 14px;font-size:14px}
+.pwform{display:flex;flex-direction:column;gap:12px}
+.pwform input{padding:9px 10px;font-size:14px;width:100%}
+.formerr{margin:0;font-size:13px;color:var(--bad)!important}
+.or{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:12px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:13px;z-index:30;max-width:calc(100% - 32px)}
 [hidden]{display:none!important}
 @media (max-width:640px){.brand h1{font-size:18px}.stat b{font-size:20px}}
@@ -152,8 +157,15 @@ p.note{font-size:12.5px;color:var(--muted);margin:0;max-width:75ch}
 <div id="loginView" class="login" hidden>
   <div class="card">
     <h1>İade-İptal Takip</h1>
-    <p id="loginMsg">Devam etmek için GitHub hesabınızla giriş yapın. Sadece yetki verilen ekip üyeleri kayıtları görebilir.</p>
-    <button class="btn primary" id="btnLogin">GitHub ile giriş yap</button>
+    <p id="loginMsg">Size verilen e-posta ve şifreyle giriş yapın.</p>
+    <form id="pwForm" class="pwform" novalidate>
+      <div class="field"><label for="inEmail">E-posta</label><input type="email" id="inEmail" autocomplete="username" required></div>
+      <div class="field"><label for="inPass">Şifre</label><input type="password" id="inPass" autocomplete="current-password" required></div>
+      <p class="formerr" id="pwErr" hidden></p>
+      <button class="btn primary" id="btnPwLogin" type="submit">Giriş yap</button>
+    </form>
+    <div class="or" id="orLine"><span>veya</span></div>
+    <button class="btn" id="btnLogin">GitHub ile giriş yap</button>
     <button class="btn" id="btnLogout2" hidden>Farklı hesapla giriş yap</button>
   </div>
 </div>
@@ -240,6 +252,11 @@ p.note{font-size:12.5px;color:var(--muted);margin:0;max-width:75ch}
         </div>
       </div>
     </div>
+    <div class="panel" id="pwPanel"><h2>Şifremi değiştir <small>E-postayla giriş yapan kullanıcılar için</small></h2>
+      <form class="settings" id="pwChange" novalidate>
+        <div class="addrow"><input type="password" id="inNewPass" autocomplete="new-password" placeholder="Yeni şifre (en az 8 karakter)" aria-label="Yeni şifre"><input type="password" id="inNewPass2" autocomplete="new-password" placeholder="Yeni şifre tekrar" aria-label="Yeni şifre tekrar"><button class="btn" type="submit">Şifreyi değiştir</button></div>
+      </form>
+    </div>
     <div class="panel"><h2>Açılır listeler <small>Tablodaki seçenekler buradan gelir</small></h2><div class="settings" id="listsBox"></div></div>
   </section>
 </main>
@@ -288,10 +305,12 @@ function supabaseApi(){
   return {
     sb,
     async session(){ const {data}=await sb.auth.getSession(); return data.session; },
+    async loginPassword(email,password){ const {data,error}=await sb.auth.signInWithPassword({email,password}); if(error) throw error; return data.session; },
+    async changePassword(password){ const {error}=await sb.auth.updateUser({password}); if(error) throw error; },
     login(){ return sb.auth.signInWithOAuth({provider:"github",options:{redirectTo:location.origin+location.pathname}}); },
     logout(){ return sb.auth.signOut(); },
     async allowed(){ const {data,error}=await sb.rpc("izinli"); if(error) throw error; return !!data; },
-    async ghUser(){ const {data}=await sb.rpc("github_kullanici"); return data; },
+    async ghUser(){ const {data}=await sb.rpc("kullanici_etiketi"); return data; },
     async month(m){
       const [y,mm]=m.split("-").map(Number); const end=ymd(new Date(y,mm,0));
       const out=[]; const size=1000;
@@ -341,7 +360,7 @@ function demoApi(){
   const now=new Date();
   return {
     async session(){ return {user:{user_metadata:{user_name:"demo",avatar_url:""}}}; },
-    login(){}, logout(){ toast("Demo modunda çıkış yok"); },
+    login(){}, logout(){ toast("Demo modunda çıkış yok"); }, async changePassword(){},
     async allowed(){ return true; }, async ghUser(){ return "demo"; },
     async month(m){ return data.filter(r=>!r.silindi&&r.excel_tarihi.startsWith(m)).map(r=>({...r})); },
     async update(id,patch){ const r=data.find(x=>x.id===id); Object.assign(r,patch); return {...r}; },
@@ -363,24 +382,33 @@ async function start(){
   if(!window.supabase){ document.body.innerHTML="<p style='padding:24px'>Bağlantı kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edip sayfayı yenileyin.</p>"; return; }
   api=supabaseApi();
   $("#btnLogin").onclick=()=>api.login();
+  $("#pwForm").addEventListener("submit",async e=>{
+    e.preventDefault();
+    const em=$("#inEmail").value.trim(), pw=$("#inPass").value, err=$("#pwErr"), b=$("#btnPwLogin");
+    if(!em||!pw){ err.hidden=false; err.textContent="E-posta ve şifreyi girin."; return; }
+    b.disabled=true; b.textContent="Giriş yapılıyor…"; err.hidden=true;
+    try{ await api.loginPassword(em,pw); location.reload(); }
+    catch(x){ err.hidden=false; err.textContent=/invalid/i.test(x.message||"")?"E-posta veya şifre hatalı.":/confirm/i.test(x.message||"")?"Bu e-posta henüz doğrulanmamış. Yöneticiden hesabı onaylamasını isteyin.":"Giriş yapılamadı: "+x.message; b.disabled=false; b.textContent="Giriş yap"; }
+  });
   $("#btnLogout2").onclick=async()=>{ await api.logout(); location.reload(); };
   const s=await api.session();
   if(!s){ $("#loginView").hidden=false; return; }
   let ok=false; try{ ok=await api.allowed(); }catch(e){ showLogin("Yetki kontrol edilemedi: "+e.message); return; }
   if(!ok){
-    const gh=await api.ghUser().catch(()=>null) || s.user?.user_metadata?.user_name || "";
-    showLogin(`"${gh}" GitHub hesabının bu uygulamaya erişim izni yok. Yöneticiden kullanıcı adınızı izinli listeye eklemesini isteyin.`, true);
+    const gh=await api.ghUser().catch(()=>null) || s.user?.user_metadata?.user_name || s.user?.email || "";
+    showLogin(`"${gh}" hesabının bu uygulamaya erişim izni yok. Yöneticiden hesabınızı izinli listeye eklemesini isteyin.`, true);
     return;
   }
   api.sb.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT") location.reload(); });
   enterApp(s);
 }
-function showLogin(msg,withLogout){ $("#loginView").hidden=false; $("#loginMsg").textContent=msg; $("#btnLogin").hidden=!!withLogout; $("#btnLogout2").hidden=!withLogout; }
+function showLogin(msg,withLogout){ $("#loginView").hidden=false; $("#loginMsg").textContent=msg; $("#btnLogin").hidden=!!withLogout; $("#pwForm").hidden=!!withLogout; $("#orLine").hidden=!!withLogout; $("#btnLogout2").hidden=!withLogout; }
 
 async function enterApp(s){
   $("#appView").hidden=false;
+  $("#pwPanel").hidden = !!(s && s.user && s.user.app_metadata && s.user.app_metadata.provider==="github");
   const md=s?.user?.user_metadata||{};
-  $("#userBox").innerHTML=(md.avatar_url?`<img src="${esc(md.avatar_url)}" alt="">`:"")+`<span>${esc(md.user_name||md.preferred_username||"")}</span><button class="btn" id="btnLogout">Çıkış</button>`;
+  $("#userBox").innerHTML=(md.avatar_url?`<img src="${esc(md.avatar_url)}" alt="">`:"")+`<span>${esc(md.user_name||md.preferred_username||s?.user?.email||"")}</span><button class="btn" id="btnLogout">Çıkış</button>`;
   $("#btnLogout").onclick=async()=>{ await api.logout(); location.reload(); };
   render();
   await Promise.all([loadLists(),loadSettings(),loadSync()]);
@@ -589,6 +617,12 @@ $("#statusList").addEventListener("change",async()=>{
 $("#inHintDays").addEventListener("change",async e=>{
   const n=Math.max(0,Math.min(60,parseInt(e.target.value,10)||0)); settings.ipucu_gun=n;
   try{ await api.setSetting("ipucu_gun",n); toast("İpucu sınırı kaydedildi"); }catch(err){ toast("Kaydedilemedi: "+err.message); }
+});
+$("#pwChange").addEventListener("submit",async e=>{
+  e.preventDefault(); const a=$("#inNewPass").value, b=$("#inNewPass2").value;
+  if(a.length<8){ toast("Şifre en az 8 karakter olmalı"); return; }
+  if(a!==b){ toast("İki şifre aynı değil"); return; }
+  try{ await api.changePassword(a); $("#inNewPass").value=""; $("#inNewPass2").value=""; toast("Şifreniz değiştirildi"); }catch(err){ toast("Şifre değiştirilemedi: "+err.message); }
 });
 function persistView(){ try{ if(view!=="ayarlar") localStorage.setItem("iit_view",view); }catch(e){} }
 ["#inSearch","#inPazarF","#inTurF","#inMissing"].forEach(s=>$(s).addEventListener("input",render));

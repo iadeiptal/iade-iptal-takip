@@ -48,6 +48,16 @@ Entegra XML ──(GitHub Actions, 2 saatte bir)──▶ Supabase veritabanı �
 
 Bu kadar. Sayfayı açıp **GitHub ile giriş yap** deyin.
 
+## Kullanıcı ekleme (e-posta + şifre)
+1. Supabase: **Authentication > Users > Add user > Create new user**. E-posta ve şifre yazın, **Auto Confirm User** işaretli olsun.
+2. SQL Editor'da izin verin (e-posta küçük harfle):
+   ```sql
+   insert into public.izinli_epostalar (eposta, ad) values ('ornek@firma.com', 'Ad Soyad');
+   ```
+3. Kullanıcı sayfada e-posta ve şifresiyle girer. Şifresini **Ayarlar > Şifremi değiştir** bölümünden değiştirebilir. Unutursa yeni şifreyi Supabase'de **Users** listesinden siz verirsiniz.
+
+Kullanıcının erişimini kaldırmak için: `delete from public.izinli_epostalar where eposta = 'ornek@firma.com';`
+
 ## Günlük kullanım
 - **Günlük:** Seçilen günün (Excel Tarihi) kayıtları. Sarı alanlar seçilmesi gereken bilgileri gösterir.
 - **Aylık:** İptal ve İade ayrı ayrı. Günlere, pazar yerine, nedene ve kaynağa göre dağılım. Bir güne tıklayınca o günün listesi açılır.
