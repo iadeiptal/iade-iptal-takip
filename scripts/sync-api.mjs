@@ -88,9 +88,10 @@ async function main() {
     const secili = new Set((db ? await ayarOku(db, "iade_durumlari", VARSAYILAN_DURUMLAR) : VARSAYILAN_DURUMLAR).map(norm));
     const gunSayisi = Number(db ? await ayarOku(db, "api_gun", 90) : 90) || 90;
     const pazarKodlari = { ...VARSAYILAN_PAZAR, ...(db ? await ayarOku(db, "pazaryeri_kodlari", {}) : {}) };
-    const baslangic = istanbulGun(-gunSayisi);
-    // Bu tarihten önce iade/iptal olmuş siparişler alınmaz (geçmişi doldurmamak için)
+    // Bu tarihten önce VERİLMİŞ siparişler hiç alınmaz (ayarlar.api_baslangic, örn. "2026-10-01")
     const enErken = db ? await ayarOku(db, "api_baslangic", null) : null;
+    let baslangic = istanbulGun(-gunSayisi);
+    if (enErken && enErken > baslangic) baslangic = enErken;
 
     const token = await girisYap();
     const siparisler = [];
@@ -104,7 +105,7 @@ async function main() {
     }
     taranan = siparisler.length;
     const satirlar = satirlariUret(siparisler, { kodlar, pazarKodlari, bugun })
-      .filter((r) => !enErken || r.excel_tarihi >= enErken);
+      .filter((r) => !enErken || !r.siparis_tarihi || r.siparis_tarihi >= enErken);
     console.log(`API: ${baslangic} – ${bugun} · ${sayim.map(([a, n]) => `${a}=${n ?? "seçili değil"}`).join(", ")}`);
     console.log(`Toplam ${taranan} sipariş, ${satirlar.length} ürün satırı`);
 
