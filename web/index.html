@@ -146,6 +146,22 @@ p.note{font-size:12.5px;color:var(--muted);margin:0;max-width:75ch}
 .formerr{margin:0;font-size:13px;color:var(--bad)!important}
 .or{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:12px}
 .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);padding:0;width:min(860px,calc(100% - 32px));max-height:calc(100% - 40px)}
+dialog::backdrop{background:rgba(10,15,20,.45)}
+.dlg-h{padding:14px 18px;border-bottom:1px solid var(--line-soft);display:flex;justify-content:space-between;align-items:center;gap:10px}
+.dlg-h h3{margin:0;font-family:var(--f-display);font-size:17px}
+.dlg-b{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.dlg-f{padding:12px 18px;border-top:1px solid var(--line-soft);display:flex;justify-content:flex-end;gap:8px}
+.mapgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.mapgrid select{width:100%}
+.drop{border:1.5px dashed var(--line);border-radius:10px;padding:26px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:8px;align-items:center}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.pv{overflow:auto;border:1px solid var(--line-soft);border-radius:8px;max-height:220px}
+.pv table{border-collapse:collapse;min-width:720px;width:100%;font-size:12.5px}
+.pv th,.pv td{padding:5px 8px;border-bottom:1px solid var(--line-soft);text-align:left;white-space:nowrap}
+.pv th{background:var(--sunk);font-size:11px;color:var(--muted)}
+.sumline{font-size:13px;background:var(--accent-soft);padding:9px 12px;border-radius:8px}
+.tag.xl{background:var(--ok-soft);color:var(--ok)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:13px;z-index:30;max-width:calc(100% - 32px)}
 [hidden]{display:none!important}
 @media (max-width:640px){.brand h1{font-size:18px}.stat b{font-size:20px}}
@@ -179,6 +195,7 @@ p.note{font-size:12.5px;color:var(--muted);margin:0;max-width:75ch}
     <button role="tab" data-view="ayarlar" aria-selected="false">Ayarlar</button>
   </div>
   <div class="actions">
+    <button class="btn" id="btnImport" hidden>Entegra Excel yükle</button>
     <button class="btn" id="btnAdd">Manuel satır ekle</button>
     <button class="btn" id="btnExport">Excel'e aktar</button>
     <span class="user" id="userBox"></span>
@@ -260,6 +277,25 @@ p.note{font-size:12.5px;color:var(--muted);margin:0;max-width:75ch}
     <div class="panel"><h2>Açılır listeler <small>Tablodaki seçenekler buradan gelir</small></h2><div class="settings" id="listsBox"></div></div>
   </section>
 </main>
+<dialog id="dlgImp">
+  <div class="dlg-h"><h3>Entegra Excel yükle</h3><button class="btn" id="impClose" type="button">Kapat</button></div>
+  <div class="dlg-b">
+    <p class="note">Entegra'da sipariş listesini İade İptal, Değişim Yapıldı ve Kısmi İade Yapıldı durumlarıyla, geniş bir tarih aralığında filtreleyip Excel olarak indirin ve buraya yükleyin. Sistemde zaten bulunan siparişler tekrar eklenmez.</p>
+    <div class="drop" id="impDrop"><strong>Excel dosyasını seçin ya da buraya sürükleyin</strong><span class="note">.xlsx, .xls veya .csv</span><input type="file" id="impFile" accept=".xlsx,.xls,.csv"></div>
+    <div id="impMap" hidden style="display:flex;flex-direction:column;gap:14px">
+      <p class="note" id="impInfo"></p>
+      <div><div class="lbl" style="margin-bottom:6px">Sütun eşleştirme</div><div class="mapgrid" id="impGrid"></div></div>
+      <div id="impStatusBox" hidden><div class="lbl" style="margin-bottom:6px">Aktarılacak durumlar</div><div class="statuslist" id="impStatus"></div></div>
+      <div class="mapgrid">
+        <div class="field"><label for="impDate">Excel Tarihi</label><input type="date" id="impDate"></div>
+        <label class="check" style="align-self:end"><input type="checkbox" id="impUseOrder"> Excel Tarihi yerine sipariş tarihini kullan</label>
+      </div>
+      <div class="sumline" id="impSummary"></div>
+      <div class="pv"><table><thead id="impPvHead"></thead><tbody id="impPvBody"></tbody></table></div>
+    </div>
+  </div>
+  <div class="dlg-f"><button class="btn primary" id="btnDoImp" disabled>Aktar</button></div>
+</dialog>
 </div>
 
 <script src="config.js"></script>
@@ -321,6 +357,8 @@ function supabaseApi(){
       return out;
     },
     async update(id,patch){ const {data,error}=await sb.from("kayitlar").update(patch).eq("id",id).select().single(); if(error) throw error; return data; },
+    async existingOrders(snos){ const have=new Set(); for(let i=0;i<snos.length;i+=150){ const {data,error}=await sb.from("kayitlar").select("siparis_no").in("siparis_no",snos.slice(i,i+150)); if(error) throw error; data.forEach(d=>have.add(d.siparis_no)); } return have; },
+    async addMany(recs){ for(let i=0;i<recs.length;i+=500){ const {error}=await sb.from("kayitlar").upsert(recs.slice(i,i+500),{onConflict:"satir_anahtari",ignoreDuplicates:true}); if(error) throw error; } },
     async addManual(rec){ const {data,error}=await sb.from("kayitlar").insert(Object.assign({kaynak_tipi:"manuel",satir_anahtari:"manuel-"+crypto.randomUUID()},rec)).select().single(); if(error) throw error; return data; },
     async lists(){ const {data,error}=await sb.from("listeler").select("*").order("sira"); if(error) throw error; return data; },
     async addListItem(alan,deger,sira){ const {error}=await sb.from("listeler").insert({alan,deger,sira}); if(error) throw error; },
@@ -365,6 +403,8 @@ function demoApi(){
     async month(m){ return data.filter(r=>!r.silindi&&r.excel_tarihi.startsWith(m)).map(r=>({...r})); },
     async update(id,patch){ const r=data.find(x=>x.id===id); Object.assign(r,patch); return {...r}; },
     async addManual(rec){ const r=Object.assign({id:id++,kaynak_tipi:"manuel",silindi:false},rec); data.push(r); return {...r}; },
+    async existingOrders(snos){ return new Set(data.filter(r=>snos.includes(r.siparis_no)).map(r=>r.siparis_no)); },
+    async addMany(recs){ recs.forEach(r=>data.push(Object.assign({id:id++,silindi:false},r))); },
     async lists(){ return listRows.slice(); },
     async addListItem(alan,deger,sira){ listRows.push({alan,deger,sira}); },
     async removeListItem(alan,deger){ listRows=listRows.filter(x=>!(x.alan===alan&&x.deger===deger)); },
@@ -513,7 +553,7 @@ function renderTable(list){
       : `<button class="rowdel" data-ask="${id}" title="Satırı kaldır" aria-label="Satırı kaldır">×</button>`;
     const grp=prev!==null&&prev!==r.siparis_no; prev=r.siparis_no;
     return `<tr class="${isMissing(r)?"missing":""} ${grp?"grp":""}">
-      <td class="mono"><div class="cellstack">${inp("siparis_no","text","Sipariş No")}<span class="hint">${r.kaynak_tipi==="manuel"?'<span class="tag man" style="margin:0">Manuel</span>':esc(r.xml_durum||"")}</span></div></td>
+      <td class="mono"><div class="cellstack">${inp("siparis_no","text","Sipariş No")}<span class="hint">${r.kaynak_tipi==="manuel"?'<span class="tag man" style="margin:0">Manuel</span>':r.kaynak_tipi==="excel"?'<span class="tag xl" style="margin:0 4px 0 0">Excel</span>'+esc(r.xml_durum||""):esc(r.xml_durum||"")}</span></div></td>
       <td>${sel("pazar_yeri","pazar",false)}</td>
       <td><div class="cellstack">${sel("tur","tur",true)}${hintFor(r)}</div></td>
       <td>${sel("kaynak","kaynak",true)}</td>
@@ -643,7 +683,7 @@ $("#btnExport").addEventListener("click",()=>{
   const list=view==="ayarlar"?rows:filtered();
   const toD=s=>s?new Date(+s.slice(0,4),+s.slice(5,7)-1,+s.slice(8,10)):"";
   const aoa=[["Sipariş Numarası","Pazar Yeri","İptal/İade","Kaynak","İptal/İade Nedeni","Ürün İsmi","Adet","Birim Fiyat","Fiyat","Excel Tarihi","Sipariş Tarihi","Not","Kargo Tutarı","XML Durumu"]]
-    .concat(list.map(r=>[r.siparis_no||"",r.pazar_yeri||"",r.tur||"",r.kaynak||"",r.neden||"",r.urun_adi||"",r.adet??"",r.birim_fiyat??"",Math.round(tutar(r)*100)/100,toD(r.excel_tarihi),toD(r.siparis_tarihi),[r.not_secim,r.not_metin].filter(Boolean).join(" - "),r.kargo_tutari??"",r.kaynak_tipi==="manuel"?"Manuel":(r.xml_durum||"")]));
+    .concat(list.map(r=>[r.siparis_no||"",r.pazar_yeri||"",r.tur||"",r.kaynak||"",r.neden||"",r.urun_adi||"",r.adet??"",r.birim_fiyat??"",Math.round(tutar(r)*100)/100,toD(r.excel_tarihi),toD(r.siparis_tarihi),[r.not_secim,r.not_metin].filter(Boolean).join(" - "),r.kargo_tutari??"",r.kaynak_tipi==="manuel"?"Manuel":r.kaynak_tipi==="excel"?("Excel · "+(r.xml_durum||"")):(r.xml_durum||"")]));
   const ws=XLSX.utils.aoa_to_sheet(aoa,{cellDates:true,dateNF:"dd.mm.yyyy"});
   const T=["TOPLAM","","","","","",list.reduce((s,r)=>s+(Number(r.adet)||0),0),"",Math.round(list.reduce((s,r)=>s+tutar(r),0)*100)/100,"","","",Math.round(list.reduce((s,r)=>s+(Number(r.kargo_tutari)||0),0)*100)/100,""];
   XLSX.utils.sheet_add_aoa(ws,[T],{origin:-1});
@@ -652,6 +692,117 @@ $("#btnExport").addEventListener("click",()=>{
   const name= view==="gunluk"?`Iade-Iptal ${trDate(day)}.xlsx`:`Iade-Iptal ${MONTHS[+month.slice(5)-1]} ${month.slice(0,4)}.xlsx`;
   XLSX.writeFile(wb,name);
 });
+
+/* ================= Entegra Excel yükleme ================= */
+const IMP_TARGETS=[
+  {k:"sno",label:"Sipariş No",req:true,keys:["sipariş numarası","siparis numarasi","sipariş no","siparis no","pazaryeri sipariş no","sipariş kodu","order number","siparis_no","sipariş"]},
+  {k:"durum",label:"Sipariş Durumu",keys:["sipariş durumu","siparis durumu","durum","statü","status","sipdurum_adi"]},
+  {k:"pazar",label:"Pazar Yeri",keys:["pazar yeri","pazaryeri","platform","satış kanalı","kanal","mağaza","cari hesap özel kodu","carihesapozelkodu"]},
+  {k:"urun",label:"Ürün İsmi",keys:["ürün adı","urun adi","ürün ismi","urun ismi","stok adı","ürün","urunadi","product"]},
+  {k:"kod",label:"Ürün Kodu / Barkod",keys:["ürün kodu","urun kodu","stok kodu","urunkodu","barkod","barcode","sku"]},
+  {k:"adet",label:"Adet",keys:["adet","miktar","quantity"]},
+  {k:"fiyat",label:"Birim Fiyat",keys:["birim fiyat","birim fiyatı","satış fiyatı","fiyat","price"]},
+  {k:"tutar",label:"Satır Tutarı (birim fiyat yoksa)",keys:["satır tutarı","toplam tutar","tutar","toplam","net toplam","net_toplam"]},
+  {k:"starih",label:"Sipariş Tarihi",keys:["sipariş tarihi","siparis tarihi","oluşturma tarihi","tarih","order date"]},
+];
+let imp=null;
+function impParseDate(v){
+  if(v instanceof Date&&!isNaN(v)) return ymd(v);
+  if(typeof v==="number"&&typeof XLSX!=="undefined"){ const p=XLSX.SSF.parse_date_code(v); return p?p.y+"-"+pad(p.m)+"-"+pad(p.d):null; }
+  const s=String(v||"").trim(); let m;
+  if((m=s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/))) return m[3]+"-"+pad(m[2])+"-"+pad(m[1]);
+  if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})/))) return m[1]+"-"+m[2]+"-"+m[3];
+  return null;
+}
+function impNum(v){ if(typeof v==="number") return Math.round(v*100)/100; return parseMoney(v); }
+function impPazar(v){
+  const n=norm(v); if(!n) return null;
+  const codes=settings.pazaryeri_kodlari||{}; if(codes[n]) return codes[n];
+  const L=lists.pazar||[]; return L.find(p=>norm(p)===n)||L.find(p=>{const f=norm(p).split(" ")[0]; return f.length>=3&&(n.includes(f)||norm(p).includes(n));})||String(v).trim();
+}
+function openImport(){
+  imp=null; $("#impFile").value=""; $("#impMap").hidden=true; $("#impDrop").hidden=false; $("#btnDoImp").disabled=true; $("#btnDoImp").textContent="Aktar";
+  $("#impDate").value=view==="gunluk"?day:today; $("#dlgImp").showModal();
+}
+function impRead(file){
+  if(typeof XLSX==="undefined"){ toast("Excel okuyucu yüklenemedi, sayfayı yenileyin"); return; }
+  const fr=new FileReader();
+  fr.onload=()=>{ try{
+    const wb=XLSX.read(new Uint8Array(fr.result),{type:"array",cellDates:true});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
+    let hi=0,best=-1; for(let i=0;i<Math.min(15,aoa.length);i++){ const c=aoa[i].filter(v=>typeof v==="string"&&v.trim()).length; if(c>best){best=c;hi=i;} }
+    const headers=aoa[hi].map((h,i)=>String(h||"").trim()||("Sütun "+(i+1)));
+    const data=aoa.slice(hi+1).filter(r=>r.some(v=>v!==""&&v!=null));
+    imp={file:file.name,headers,data,map:{}}; const used=new Set();
+    for(const t of IMP_TARGETS){ let f=-1;
+      for(const key of t.keys){ const nk=norm(key); f=headers.findIndex((h,i)=>!used.has(i)&&norm(h)===nk); if(f>=0) break; }
+      if(f<0) for(const key of t.keys){ const nk=norm(key); f=headers.findIndex((h,i)=>!used.has(i)&&norm(h).includes(nk)); if(f>=0) break; }
+      imp.map[t.k]=f; if(f>=0) used.add(f); }
+    $("#impInfo").textContent=`${file.name} · ${data.length} satır · başlıklar ${hi+1}. satırda. Eşleşmeyen ya da yanlış eşleşen sütunları aşağıdan düzeltin.`;
+    $("#impGrid").innerHTML=IMP_TARGETS.map(t=>`<div class="field"><label for="map-${t.k}">${t.label}${t.req?" *":""}</label><select id="map-${t.k}" data-map="${t.k}"><option value="-1">— yok —</option>${headers.map((h,i)=>`<option value="${i}"${imp.map[t.k]===i?" selected":""}>${esc(h)}</option>`).join("")}</select></div>`).join("");
+    $("#impDrop").hidden=true; $("#impMap").hidden=false; impStatus(); impPreview();
+  }catch(err){ toast("Dosya okunamadı: "+err.message); } };
+  fr.readAsArrayBuffer(file);
+}
+function impStatus(){
+  const i=imp.map.durum, box=$("#impStatusBox");
+  if(i<0){ box.hidden=true; return; }
+  const cnt=new Map(); imp.data.forEach(r=>{ const v=String(r[i]??"").trim(); cnt.set(v,(cnt.get(v)||0)+1); });
+  const want=new Set((settings.iade_durumlari||[]).map(norm));
+  box.hidden=false;
+  $("#impStatus").innerHTML=[...cnt].sort((a,b)=>b[1]-a[1]).map(([v,n],j)=>`<label><input type="checkbox" id="is-${j}" data-sv="${esc(v)}"${want.has(norm(v))?" checked":""}> ${esc(v||"(boş)")} <small>${n}</small></label>`).join("");
+}
+function impBuild(){
+  const M=imp.map, g=(r,k)=>M[k]>=0?r[M[k]]:"";
+  const sel= M.durum>=0 ? new Set([...document.querySelectorAll("#impStatus input:checked")].map(x=>x.dataset.sv)) : null;
+  const useOrder=$("#impUseOrder").checked, fixed=$("#impDate").value||today;
+  const seq=new Map(), out=[];
+  for(const r of imp.data){
+    const durum=String(g(r,"durum")??"").trim();
+    if(sel&&!sel.has(durum)) continue;
+    const sno=String(g(r,"sno")??"").trim(); if(!sno) continue;
+    const kod=String(g(r,"kod")??"").trim(), urun=String(g(r,"urun")??"").trim();
+    const kk=sno+"|"+(kod||norm(urun)||"urun"); const n=(seq.get(kk)||0)+1; seq.set(kk,n);
+    const adet=impNum(g(r,"adet"))??1; let bf=impNum(g(r,"fiyat"));
+    if(bf==null){ const t=impNum(g(r,"tutar")); if(t!=null) bf=Math.round(t/(adet||1)*100)/100; }
+    const sd=impParseDate(g(r,"starih"));
+    out.push({kaynak_tipi:"excel",satir_anahtari:"excel|"+kk+"|"+n,siparis_no:sno,pazar_yeri:impPazar(g(r,"pazar")),urun_kodu:kod||null,urun_adi:urun,adet,birim_fiyat:bf,
+      siparis_tarihi:sd,xml_durum:durum||null,excel_tarihi:(useOrder&&sd)?sd:fixed});
+  }
+  return out;
+}
+function impPreview(){
+  if(!imp) return;
+  const ok=imp.map.sno>=0, out=ok?impBuild():[]; imp.rows=out;
+  const orders=new Set(out.map(r=>r.siparis_no)).size;
+  $("#impSummary").textContent= ok ? `${orders} sipariş, ${out.length} ürün satırı aktarılmaya aday. Sistemde zaten bulunan siparişler aktarım sırasında atlanır.` : "Sipariş No sütununu seçin.";
+  $("#btnDoImp").disabled=!ok||!out.length;
+  $("#impPvHead").innerHTML="<tr><th>Sipariş No</th><th>Durum</th><th>Pazar Yeri</th><th>Ürün</th><th>Adet</th><th>Birim Fiyat</th><th>Sipariş Tarihi</th><th>Excel Tarihi</th></tr>";
+  $("#impPvBody").innerHTML=out.slice(0,8).map(r=>`<tr><td>${esc(r.siparis_no)}</td><td>${esc(r.xml_durum||"")}</td><td>${esc(r.pazar_yeri||"")}</td><td>${esc(r.urun_adi)}</td><td>${esc(r.adet)}</td><td>${r.birim_fiyat==null?"":esc(fmt2(r.birim_fiyat))}</td><td>${esc(trDate(r.siparis_tarihi))}</td><td>${esc(trDate(r.excel_tarihi))}</td></tr>`).join("")+(out.length>8?`<tr><td colspan="8" class="muted">… ${out.length-8} satır daha</td></tr>`:"");
+}
+async function impRun(){
+  const b=$("#btnDoImp"), list=(imp&&imp.rows)||[]; if(!list.length) return;
+  b.disabled=true; b.textContent="Kontrol ediliyor…";
+  try{
+    const have=await api.existingOrders([...new Set(list.map(r=>r.siparis_no))]);
+    const add=list.filter(r=>!have.has(r.siparis_no)), skipped=new Set(list.filter(r=>have.has(r.siparis_no)).map(r=>r.siparis_no)).size;
+    b.textContent=`Aktarılıyor… (${add.length} satır)`;
+    if(add.length) await api.addMany(add);
+    $("#dlgImp").close();
+    toast(`${new Set(add.map(r=>r.siparis_no)).size} sipariş (${add.length} satır) eklendi`+(skipped?`, sistemde zaten olan ${skipped} sipariş atlandı`:""));
+    await loadMonth();
+  }catch(e){ toast("Aktarılamadı: "+e.message); b.disabled=false; b.textContent="Aktar"; }
+}
+$("#btnImport").addEventListener("click",openImport);
+$("#impClose").addEventListener("click",()=>$("#dlgImp").close());
+$("#impFile").addEventListener("change",e=>{ const f=e.target.files[0]; if(f) impRead(f); });
+$("#impDrop").addEventListener("dragover",e=>{ e.preventDefault(); $("#impDrop").classList.add("over"); });
+$("#impDrop").addEventListener("dragleave",()=>$("#impDrop").classList.remove("over"));
+$("#impDrop").addEventListener("drop",e=>{ e.preventDefault(); $("#impDrop").classList.remove("over"); const f=e.dataTransfer.files[0]; if(f) impRead(f); });
+$("#impGrid").addEventListener("change",e=>{ const k=e.target.dataset.map; if(!k) return; imp.map[k]=+e.target.value; if(k==="durum") impStatus(); impPreview(); });
+["#impStatus","#impUseOrder","#impDate"].forEach(s=>$(s).addEventListener("change",impPreview));
+$("#btnDoImp").addEventListener("click",impRun);
 
 start();
 })();

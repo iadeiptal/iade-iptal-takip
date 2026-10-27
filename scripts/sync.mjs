@@ -139,15 +139,15 @@ async function main() {
       if (error) throw error;
     }
 
-    // Var olan anahtarları bul, sadece yenileri ekle
+    // Sistemde zaten bulunan siparişleri atla (XML, Excel ya da elle girilmiş olabilir; kaldırılanlar dahil)
     const mevcut = new Set();
-    const anahtarlar = satirlar.map((r) => r.satir_anahtari);
-    for (let i = 0; i < anahtarlar.length; i += 200) {
-      const { data, error } = await db.from("kayitlar").select("satir_anahtari").in("satir_anahtari", anahtarlar.slice(i, i + 200));
+    const siparisler2 = [...new Set(satirlar.map((r) => r.siparis_no))];
+    for (let i = 0; i < siparisler2.length; i += 150) {
+      const { data, error } = await db.from("kayitlar").select("siparis_no").in("siparis_no", siparisler2.slice(i, i + 150));
       if (error) throw error;
-      data.forEach((d) => mevcut.add(d.satir_anahtari));
+      data.forEach((d) => mevcut.add(d.siparis_no));
     }
-    const yeni = satirlar.filter((r) => !mevcut.has(r.satir_anahtari));
+    const yeni = satirlar.filter((r) => !mevcut.has(r.siparis_no));
     for (let i = 0; i < yeni.length; i += 500) {
       const { error } = await db.from("kayitlar").upsert(yeni.slice(i, i + 500), { onConflict: "satir_anahtari", ignoreDuplicates: true });
       if (error) throw error;
