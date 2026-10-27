@@ -1,0 +1,23 @@
+   name: Entegra API keşif
+
+   on:
+     workflow_dispatch:
+       inputs:
+         gun:
+           description: "Kaç günlük sipariş taransın"
+           default: "60"
+
+   jobs:
+     kesif:
+       runs-on: ubuntu-latest
+       timeout-minutes: 15
+       steps:
+         - uses: actions/checkout@v4
+         - uses: actions/setup-node@v4
+           with:
+             node-version: 20
+         - run: node scripts/api-kesif.mjs
+           env:
+             ENTEGRA_EMAIL: ${{ secrets.ENTEGRA_EMAIL }}
+             ENTEGRA_PASSWORD: ${{ secrets.ENTEGRA_PASSWORD }}
+             GUN: ${{ inputs.gun }}
