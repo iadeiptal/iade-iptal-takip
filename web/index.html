@@ -188,7 +188,7 @@ dialog::backdrop{background:rgba(10,15,20,.45)}
 
 <div id="appView" hidden>
 <header class="top"><div class="wrap">
-  <div class="brand"><h1>İade-İptal Takip</h1><span id="syncInfo">Entegra sipariş XML'inden otomatik</span></div>
+  <div class="brand"><h1>İade-İptal Takip</h1><span id="syncInfo">Entegra'dan otomatik</span></div>
   <div class="tabs" role="tablist">
     <button role="tab" data-view="gunluk" aria-selected="true">Günlük</button>
     <button role="tab" data-view="aylik" aria-selected="false">Aylık</button>
@@ -251,12 +251,12 @@ dialog::backdrop{background:rgba(10,15,20,.45)}
   </div>
 
   <section id="settingsView" hidden style="display:flex;flex-direction:column;gap:16px">
-    <div class="panel"><h2>Otomatik çekim <small>Entegra sipariş XML'i</small></h2>
+    <div class="panel"><h2>Otomatik çekim <small>Entegra API</small></h2>
       <div class="settings">
         <div class="listrow">
           <div class="lbl">Tabloya alınacak sipariş durumları</div>
           <div class="statuslist" id="statusList"></div>
-          <p class="note">XML'de görülen durumlar burada listelenir. İşaretli durumdaki siparişlerin ürün satırları, ilk görüldükleri günün tarihiyle (Excel Tarihi) tabloya eklenir.</p>
+          <p class="note">İşaretli durumdaki siparişlerin ürün satırları tabloya eklenir. Excel Tarihi, siparişin bu duruma geçtiği gündür. Yanındaki sayı son çekimde bulunan sipariş sayısıdır.</p>
         </div>
         <div class="listrow">
           <div class="lbl">İptal / İade ipucu sınırı</div>
@@ -265,7 +265,7 @@ dialog::backdrop{background:rgba(10,15,20,.45)}
         <div class="listrow">
           <div class="lbl">Son çekimler</div>
           <div style="overflow-x:auto"><table class="log" id="logTable"></table></div>
-          <p class="note">Elle çekim yapmak için GitHub'da deponuzun Actions sekmesinde "Entegra XML senkron" işini açıp "Run workflow" düğmesine basın.</p>
+          <p class="note">Elle çekim yapmak için GitHub'da deponuzun Actions sekmesinde "Entegra XML senkron" işini açıp "Run workflow" düğmesine basın. Çekim yaklaşık 1–2 dakika sürer.</p>
         </div>
       </div>
     </div>
@@ -612,7 +612,7 @@ function renderSettings(){
   const all=[...xmlStatuses]; (settings.iade_durumlari||[]).forEach(d=>{ if(!all.some(x=>norm(x.durum)===norm(d))) all.push({durum:d,son_adet:0}); });
   $("#statusList").innerHTML= all.length ? all.map((s,i)=>`<label><input type="checkbox" id="st-${i}" data-st="${esc(s.durum)}"${sel.has(norm(s.durum))?" checked":""}> ${esc(s.durum)} <small>son çekimde ${s.son_adet}</small></label>`).join("") : '<span class="note">İlk otomatik çekimden sonra XML\'deki durumlar burada görünür.</span>';
   $("#inHintDays").value=settings.ipucu_gun??3;
-  $("#logTable").innerHTML= logs.length ? `<tr><th>Zaman</th><th>Sonuç</th><th>XML sipariş</th><th>Eşleşen</th><th>Yeni satır</th></tr>`+logs.map(l=>`<tr><td>${esc(new Date(l.zaman).toLocaleString("tr-TR"))}</td><td class="${l.basarili?"ok":"bad"}">${l.basarili?"Başarılı":esc(l.mesaj||"Hata")}</td><td>${l.siparis??""}</td><td>${l.eslesen??""}</td><td>${l.yeni_satir??""}</td></tr>`).join("") : '<tr><td class="muted">Henüz çekim kaydı yok.</td></tr>';
+  $("#logTable").innerHTML= logs.length ? `<tr><th>Zaman</th><th>Sonuç</th><th>Bulunan sipariş</th><th>Eşleşen</th><th>Yeni satır</th></tr>`+logs.map(l=>`<tr><td>${esc(new Date(l.zaman).toLocaleString("tr-TR"))}</td><td class="${l.basarili?"ok":"bad"}">${l.basarili?"Başarılı":esc(l.mesaj||"Hata")}</td><td>${l.siparis??""}</td><td>${l.eslesen??""}</td><td>${l.yeni_satir??""}</td></tr>`).join("") : '<tr><td class="muted">Henüz çekim kaydı yok.</td></tr>';
   $("#listsBox").innerHTML=LIST_KEYS.map(k=>`<div class="listrow"><div class="lbl">${LIST_LABELS[k]} · ${(lists[k]||[]).length}</div>
     <div class="chips">${(lists[k]||[]).map(v=>`<span class="chip">${esc(v)}<button data-lrm="${k}" data-v="${esc(v)}" aria-label="${esc(v)} seçeneğini kaldır">×</button></span>`).join("")}</div>
     <form class="addrow" data-ladd="${k}"><input id="add-${k}" placeholder="Yeni seçenek ekle"><button class="btn" type="submit">Ekle</button></form></div>`).join("")

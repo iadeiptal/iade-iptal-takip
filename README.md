@@ -1,5 +1,9 @@
 # İade-İptal Takip
 
+> **27.10.2026 güncellemesi:** Otomatik çekim artık Entegra REST API'den yapılıyor (`scripts/sync-api.mjs`).
+> GitHub Secrets: `ENTEGRA_EMAIL`, `ENTEGRA_PASSWORD`. Durum kodları: 9 = İade İptal, 16 = Değişim Yapıldı, 17 = Kısmi İade Yapıldı
+> (Supabase `ayarlar.api_durum_kodlari`). XML çekimi (`scripts/sync.mjs`) yedek olarak duruyor.
+
 Entegra sipariş XML'inden "İade İptal" durumundaki siparişleri otomatik çeker. Her ürünü ayrı bir satır olarak tabloya ekler. Ekip, GitHub hesabıyla giriş yaptığı web sayfasından İptal/İade, Kaynak, Neden ve Not alanlarını doldurur. Kayıtlar Excel Tarihine göre günlük ve aylık olarak raporlanır.
 
 ## Nasıl çalışır?
