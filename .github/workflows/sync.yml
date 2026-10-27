@@ -1,4 +1,4 @@
-name: Entegra XML senkron
+name: Entegra senkron
 
 on:
   schedule:
@@ -12,15 +12,16 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - run: npm install --omit=dev --no-audit --no-fund
-      - run: node scripts/sync.mjs
+      - run: node scripts/sync-api.mjs
         env:
-          XML_URL: ${{ secrets.XML_URL }}
+          ENTEGRA_EMAIL: ${{ secrets.ENTEGRA_EMAIL }}
+          ENTEGRA_PASSWORD: ${{ secrets.ENTEGRA_PASSWORD }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
