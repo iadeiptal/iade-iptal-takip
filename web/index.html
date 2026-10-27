@@ -208,7 +208,10 @@ dialog::backdrop{background:rgba(10,15,20,.45)}
 
   <section id="filters" class="toolbar">
     <div class="field" id="fDay"><label for="inDay">Gün (Excel Tarihi)</label><input type="date" id="inDay"></div>
-    <div class="field" id="fMonth" hidden><label for="inMonth">Ay (Excel Tarihi)</label><input type="month" id="inMonth"></div>
+    <div class="field" id="fMonth" hidden><label for="inMonth">Ay</label><input type="month" id="inMonth"></div>
+    <div class="field" id="fMode" hidden><label for="inMode">Aylık rapor</label><select id="inMode">
+      <option value="kural">İade/İptal sipariş ayında, Değişim düştüğü ayda</option>
+      <option value="excel">Hepsi düştüğü ayda (Excel Tarihi)</option></select></div>
     <div class="field"><label for="inSdFrom">Sipariş Tarihi</label><div class="range"><input type="date" id="inSdFrom" aria-label="Sipariş tarihi başlangıç"><span>–</span><input type="date" id="inSdTo" aria-label="Sipariş tarihi bitiş"><button class="btn" id="btnSdClear" type="button" title="Sipariş tarihi filtresini temizle" hidden>Temizle</button></div></div>
     <div class="field grow"><label for="inSearch">Ara</label><input type="search" id="inSearch" placeholder="Sipariş no, ürün, not…"></div>
     <div class="field"><label for="inPazarF">Pazar Yeri</label><select id="inPazarF"></select></div>
@@ -219,7 +222,7 @@ dialog::backdrop{background:rgba(10,15,20,.45)}
   <div class="strip" id="strip"></div>
 
   <section id="monthView" hidden style="display:flex;flex-direction:column;gap:16px">
-    <div class="panel"><h2>Günlere göre kayıt <small>Bir güne tıklayınca o günün listesi açılır</small></h2>
+    <div class="panel"><h2>Günlere göre kayıt <small id="dayHint">Bir güne tıklayınca o günün listesi açılır</small></h2>
       <div class="days"><div class="daycols" id="dayCols"></div></div>
       <div class="legend"><span><i style="background:var(--iptal)"></i>İptal</span><span><i style="background:var(--iade)"></i>İade</span><span><i style="background:var(--diger)"></i>Diğer</span><span><i style="background:var(--warn)"></i>Seçilmemiş</span></div>
     </div>
@@ -326,7 +329,13 @@ const EDITABLE=["siparis_no","pazar_yeri","tur","kaynak","neden","urun_adi","ade
 
 /* ================= durum ================= */
 const today=ymd(new Date());
-let view="gunluk", day=today, month=today.slice(0,7);
+let view="gunluk", day=today, month=today.slice(0,7), raporModu="kural";
+try{ const v=localStorage.getItem("iit_mode"); if(v==="kural"||v==="excel") raporModu=v; }catch(e){}
+// Aylık raporda bir satırın hangi aya sayılacağı:
+// "kural": Değişim -> düştüğü gün (Excel Tarihi); İade/İptal/Kısmi İade ve diğerleri -> sipariş tarihi
+const degisimMi=r=>r.tur==="Değişim"||norm(r.xml_durum).includes("değişim");
+const raporTarihi=r=> raporModu==="excel"||degisimMi(r)||!r.siparis_tarihi ? r.excel_tarihi : r.siparis_tarihi;
+const aydaMi=r=>!r.silindi&&(raporTarihi(r)||"").startsWith(month);
 try{ const v=localStorage.getItem("iit_view"); if(v==="gunluk"||v==="aylik") view=v; }catch(e){}
 let rows=[], lists={}, settings={iade_durumlari:["İade İptal"],ipucu_gun:3}, xmlStatuses=[], logs=[];
 let loading=true, pendingRender=false, confirmId=null, api=null;
@@ -351,7 +360,10 @@ function supabaseApi(){
       const [y,mm]=m.split("-").map(Number); const end=ymd(new Date(y,mm,0));
       const out=[]; const size=1000;
       for(let from=0;;from+=size){
-        const {data,error}=await sb.from("kayitlar").select("*").eq("silindi",false).gte("excel_tarihi",m+"-01").lte("excel_tarihi",end).order("excel_tarihi").order("id").range(from,from+size-1);
+        const a=m+"-01";
+        const {data,error}=await sb.from("kayitlar").select("*").eq("silindi",false)
+          .or(`and(excel_tarihi.gte.${a},excel_tarihi.lte.${end}),and(siparis_tarihi.gte.${a},siparis_tarihi.lte.${end})`)
+          .order("id").range(from,from+size-1);
         if(error) throw error; out.push(...data); if(data.length<size) break;
       }
       return out;
@@ -400,7 +412,7 @@ function demoApi(){
     async session(){ return {user:{user_metadata:{user_name:"demo",avatar_url:""}}}; },
     login(){}, logout(){ toast("Demo modunda çıkış yok"); }, async changePassword(){},
     async allowed(){ return true; }, async ghUser(){ return "demo"; },
-    async month(m){ return data.filter(r=>!r.silindi&&r.excel_tarihi.startsWith(m)).map(r=>({...r})); },
+    async month(m){ return data.filter(r=>!r.silindi&&((r.excel_tarihi||"").startsWith(m)||(r.siparis_tarihi||"").startsWith(m))).map(r=>({...r})); },
     async update(id,patch){ const r=data.find(x=>x.id===id); Object.assign(r,patch); return {...r}; },
     async addManual(rec){ const r=Object.assign({id:id++,kaynak_tipi:"manuel",silindi:false},rec); data.push(r); return {...r}; },
     async existingOrders(snos){ return new Set(data.filter(r=>snos.includes(r.siparis_no)).map(r=>r.siparis_no)); },
@@ -476,7 +488,7 @@ function onLive(p){
   const r=p.new&&p.new.id?p.new:null;
   if(!r) return;
   const i=rows.findIndex(x=>x.id===r.id);
-  const inMonth=!r.silindi&&r.excel_tarihi&&r.excel_tarihi.startsWith(month);
+  const inMonth=!r.silindi&&((r.excel_tarihi||"").startsWith(month)||(r.siparis_tarihi||"").startsWith(month));
   if(i>=0){ if(inMonth) rows[i]=r; else rows.splice(i,1); }
   else if(inMonth) rows.push(r);
   scheduleRender();
@@ -495,6 +507,7 @@ function filtered(){
   const q=norm($("#inSearch").value), pz=$("#inPazarF").value, tr=$("#inTurF").value, miss=$("#inMissing").checked;
   return rows.filter(r=>{
     if(view==="gunluk"&&r.excel_tarihi!==day) return false;
+    if(view==="aylik"&&!aydaMi(r)) return false;
     if(pz&&r.pazar_yeri!==pz) return false;
     if(tr==="__bos"? !!r.tur : (tr&&r.tur!==tr)) return false;
     if(miss&&!isMissing(r)) return false;
@@ -513,12 +526,12 @@ function render(){
   document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.view===view)));
   const st=view==="ayarlar";
   $("#filters").hidden=st; $("#strip").hidden=st; $("#tablePanel").hidden=st; $("#settingsView").hidden=!st;
-  $("#monthView").hidden=view!=="aylik"; $("#fDay").hidden=view!=="gunluk"; $("#fMonth").hidden=view!=="aylik";
+  $("#monthView").hidden=view!=="aylik"; $("#fDay").hidden=view!=="gunluk"; $("#fMonth").hidden=view!=="aylik"; $("#fMode").hidden=view!=="aylik"; $("#inMode").value=raporModu;
   $("#inDay").value=day; $("#inMonth").value=month;
   if(st){ renderSettings(); return; }
   const list=filtered(); const [y,m]=month.split("-");
   $("#tableTitle").textContent= view==="gunluk" ? trDate(day)+" kayıtları" : MONTHS[+m-1]+" "+y+" kayıtları";
-  $("#tableCount").textContent= loading ? "yükleniyor…" : `${list.length} ürün satırı · ${new Set(list.map(r=>r.siparis_no)).size} sipariş`;
+  $("#tableCount").textContent= loading ? "yükleniyor…" : `${list.length} satır · ${new Set(list.map(r=>r.siparis_no)).size} sipariş`;
   renderStrip(list); renderTable(list);
   if(view==="aylik") renderMonth();
 }
@@ -584,7 +597,7 @@ function stackBar(parts,max){
   return `<div class="track">`+parts.filter(p=>p.n).map(p=>`<div class="fill" style="width:${(p.n/max*100).toFixed(2)}%;background:var(${p.c})"></div>`).join("")+`</div>`;
 }
 function bars(el,field,mode){
-  const m={}; for(const r of rows){ const k=r[field]||"(seçilmemiş)"; const o=(m[k]=m[k]||{n:0,s:0,ip:0,ia:0,dg:0}); o.n++; o.s+=tutar(r); if(r.tur==="İptal")o.ip++; else if(r.tur==="İade")o.ia++; else o.dg++; }
+  const m={}; for(const r of rows.filter(aydaMi)){ const k=r[field]||"(seçilmemiş)"; const o=(m[k]=m[k]||{n:0,s:0,ip:0,ia:0,dg:0}); o.n++; o.s+=tutar(r); if(r.tur==="İptal")o.ip++; else if(r.tur==="İade")o.ia++; else o.dg++; }
   const ent=Object.entries(m).sort((a,b)=>b[1].n-a[1].n);
   if(!ent.length){ el.innerHTML='<p class="note">Bu ay için veri yok.</p>'; return; }
   const max=Math.max(...ent.map(e=>e[1].n));
@@ -600,12 +613,13 @@ function renderMonth(){
   bars($("#bTur"),"tur","tur"); bars($("#bPazar"),"pazar_yeri","pazar"); bars($("#bNeden"),"neden"); bars($("#bKaynak"),"kaynak");
   const [y,m]=month.split("-").map(Number), nd=new Date(y,m,0).getDate();
   const c=[]; for(let d=0;d<=nd;d++) c.push({ip:0,ia:0,dg:0,bos:0,n:0});
-  for(const r of rows){ if(!r.excel_tarihi||!r.excel_tarihi.startsWith(month)) continue; const o=c[+r.excel_tarihi.slice(8,10)]; o.n++; if(r.tur==="İptal")o.ip++; else if(r.tur==="İade")o.ia++; else if(r.tur)o.dg++; else o.bos++; }
+  for(const r of rows){ if(!aydaMi(r)) continue; const o=c[+raporTarihi(r).slice(8,10)]; o.n++; if(r.tur==="İptal")o.ip++; else if(r.tur==="İade")o.ia++; else if(r.tur)o.dg++; else o.bos++; }
   const max=Math.max(1,...c.map(o=>o.n)); let h="";
   for(let d=1;d<=nd;d++){ const o=c[d], key=`${month}-${pad(d)}`;
     const seg=(n,v)=>n?`<div style="height:${(n/max*92).toFixed(1)}px;background:var(${v})"></div>`:"";
     h+=`<button class="daycol${key===today?" today":""}" data-day="${key}" aria-label="${d} ${MONTHS[m-1]}: ${o.n} satır"><span class="n">${o.n||""}</span><div class="stack" style="${o.n?"":"height:1px"}">${seg(o.ip,"--iptal")}${seg(o.ia,"--iade")}${seg(o.dg,"--diger")}${seg(o.bos,"--warn")}</div><span>${d}</span></button>`; }
   $("#dayCols").innerHTML=h;
+  $("#dayHint").textContent= raporModu==="excel" ? "Bir güne tıklayınca o gün düşen kayıtlar açılır" : "İade/İptal sipariş gününe, Değişim düştüğü güne göre. Bir güne tıklayınca o gün düşen kayıtlar açılır.";
 }
 function renderSettings(){
   const sel=new Set((settings.iade_durumlari||[]).map(norm));
@@ -672,6 +686,7 @@ function persistView(){ try{ if(view!=="ayarlar") localStorage.setItem("iit_view
 ["#inSdFrom","#inSdTo"].forEach(s=>$(s).addEventListener("change",()=>{ $("#btnSdClear").hidden=!($("#inSdFrom").value||$("#inSdTo").value); render(); }));
 $("#btnSdClear").addEventListener("click",()=>{ $("#inSdFrom").value=""; $("#inSdTo").value=""; $("#btnSdClear").hidden=true; render(); });
 $("#inDay").addEventListener("change",e=>{ if(!e.target.value) return; day=e.target.value; const m=day.slice(0,7); if(m!==month){ month=m; loadMonth(); } else render(); });
+$("#inMode").addEventListener("change",e=>{ raporModu=e.target.value; try{ localStorage.setItem("iit_mode",raporModu); }catch(x){} render(); });
 $("#inMonth").addEventListener("change",e=>{ if(!e.target.value) return; month=e.target.value; if(!day.startsWith(month)) day=month+"-01"; loadMonth(); });
 
 $("#btnAdd").addEventListener("click",async()=>{
