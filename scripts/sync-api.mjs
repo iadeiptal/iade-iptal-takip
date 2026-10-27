@@ -33,6 +33,16 @@ export function gun(v) {
   return null;
 }
 
+// Bir ürün satırının KDV DAHİL tutarı (adet dahil).
+// Entegra API: priceIncludedTax = KDV dahil birim fiyat; price/total = KDV HARİÇ (kullanılmaz).
+export function satirTutari(k, adet) {
+  const kdvDahil = sayi(k.priceIncludedTax);
+  if (kdvDahil != null && kdvDahil > 0) return kdvDahil * adet;
+  const fiyat = sayi(k.price), kdv = sayi(k.tax);
+  if (fiyat != null) return (fiyat * adet) + (kdv || 0);
+  return null;
+}
+
 export function satirlariUret(siparisler, { kodlar, pazarKodlari, bugun }) {
   const out = [];
   for (const s of siparisler) {
@@ -46,29 +56,46 @@ export function satirlariUret(siparisler, { kodlar, pazarKodlari, bugun }) {
     let excelTarihi = gun(s.date_change) || bugun;
     if (siparisTarihi && excelTarihi < siparisTarihi) excelTarihi = siparisTarihi;
     if (excelTarihi > bugun) excelTarihi = bugun;
-    const kalemler = Array.isArray(s.order_product) ? s.order_product : [];
-    const sira = new Map();
     const ortak = {
       kaynak_tipi: "otomatik", siparis_no: sno, pazar_yeri: pazar, siparis_tarihi: siparisTarihi,
       xml_durum: kodlar[kod] || `Durum ${kod}`, excel_tarihi: excelTarihi,
       _alternatif: [metin(s.platform_reference_no), metin(s.supplier_id)].filter((x) => x && x !== sno),
     };
+    const kalemler = Array.isArray(s.order_product) ? s.order_product : [];
+    // Bir sipariş = bir satır. Çok ürünlü siparişlerde ürünler tek satırda birleştirilir.
+    let toplamAdet = 0, toplamTutar = 0, tutarVar = false;
+    const adlar = [], kodlar2 = [];
     for (const k of kalemler) {
-      const urunKodu = metin(k.store_stock_code) || metin(k.model) || metin(k.barcode) || metin(k.product_id) || "urun";
-      const n = (sira.get(urunKodu) || 0) + 1; sira.set(urunKodu, n);
       const adet = sayi(k.quantity) || 1;
-      const toplam = sayi(k.total), fiyat = sayi(k.price);
-      const birim = toplam && toplam > 0 ? Math.round((toplam / adet) * 100) / 100 : fiyat;
-      out.push({
-        ...ortak,
-        satir_anahtari: `${sno}|${urunKodu}|${n}`,
-        urun_kodu: urunKodu,
-        barkod: metin(k.barcode) || null,
-        urun_adi: metin(k.name) || metin(k.store_stock_name) || metin(k.invoice_name),
-        adet, birim_fiyat: birim,
-      });
+      const ad = metin(k.name) || metin(k.store_stock_name) || metin(k.invoice_name) || "Ürün";
+      adlar.push(adet > 1 ? `${ad} ×${adet}` : ad);
+      const kod = metin(k.store_stock_code) || metin(k.model) || metin(k.barcode);
+      if (kod) kodlar2.push(kod);
+      toplamAdet += adet;
+      const t = satirTutari(k, adet);
+      if (t != null) { toplamTutar += t; tutarVar = true; }
     }
-    if (!kalemler.length) out.push({ ...ortak, satir_anahtari: `${sno}|siparis|1`, urun_adi: "", adet: 1, birim_fiyat: sayi(s.grand_total) });
+    const tek = kalemler.length === 1;
+    // Sipariş tutarı: Entegra'daki sipariş toplamı (grand_total, KDV dahil). Yoksa ürünlerin toplamı.
+    const gt = sayi(s.grand_total);
+    const tutar = gt != null && gt > 0 ? gt : (tutarVar ? Math.round(toplamTutar * 100) / 100 : null);
+    // Durum kuralları: Değişim -> fiyat yok; Kısmi İade -> ürün/adet/fiyat ekip tarafından girilir
+    const durumAd = norm(ortak.xml_durum);
+    if (durumAd.includes("kısmi")) {
+      out.push({ ...ortak, satir_anahtari: `${sno}|siparis`, urun_kodu: null, barkod: null, urun_adi: "", adet: null, birim_fiyat: null, tutar: null });
+      continue;
+    }
+    const fiyatsiz = durumAd.includes("değişim");
+    out.push({
+      ...ortak,
+      satir_anahtari: `${sno}|siparis`,
+      urun_kodu: kodlar2.join(", ") || null,
+      barkod: tek ? metin(kalemler[0].barcode) || null : null,
+      urun_adi: adlar.join(" + "),
+      adet: toplamAdet || 1,
+      birim_fiyat: fiyatsiz || !tek ? null : (sayi(kalemler[0].priceIncludedTax) ?? (tutar != null ? Math.round((tutar / (toplamAdet || 1)) * 100) / 100 : null)),
+      tutar: fiyatsiz ? null : tutar,
+    });
   }
   return out;
 }
@@ -107,7 +134,7 @@ async function main() {
     const satirlar = satirlariUret(siparisler, { kodlar, pazarKodlari, bugun })
       .filter((r) => !enErken || !r.siparis_tarihi || r.siparis_tarihi >= enErken);
     console.log(`API: ${baslangic} – ${bugun} · ${sayim.map(([a, n]) => `${a}=${n ?? "seçili değil"}`).join(", ")}`);
-    console.log(`Toplam ${taranan} sipariş, ${satirlar.length} ürün satırı`);
+    console.log(`Toplam ${taranan} sipariş, ${satirlar.length} satır (sipariş başına bir satır)`);
 
     if (DRY) { console.log(JSON.stringify(satirlar.slice(0, 5), null, 2)); return; }
 

@@ -232,3 +232,6 @@ alter table public.kayitlar add constraint kayitlar_kaynak_tipi_check check (kay
 drop policy if exists kayit_ekle on public.kayitlar;
 create policy kayit_ekle on public.kayitlar for insert to authenticated
   with check (public.izinli() and kaynak_tipi in ('manuel','excel'));
+
+-- Sipariş başına tek satır: satır tutarı ayrı saklanır (27.10.2026)
+alter table public.kayitlar add column if not exists tutar numeric;

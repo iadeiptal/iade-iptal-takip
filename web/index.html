@@ -314,7 +314,7 @@ const MONTHS=["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağust
 const fmt2=n=>(Number(n)||0).toLocaleString("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2});
 const money=n=>fmt2(n)+" ₺";
 const norm=s=>String(s??"").toLocaleLowerCase("tr").replace(/\s+/g," ").trim();
-const tutar=r=>(Number(r.adet)||0)*(Number(r.birim_fiyat)||0);
+const tutar=r=>(r.tutar!=null&&r.tutar!=="")?Number(r.tutar):(Number(r.adet)||0)*(Number(r.birim_fiyat)||0);
 const daysBetween=(a,b)=>Math.round((new Date(b+"T00:00:00")-new Date(a+"T00:00:00"))/864e5);
 const parseMoney=v=>{ let s=String(v??"").replace(/[^\d,.\-]/g,""); if(!s) return null; if(s.includes(",")) s=s.replace(/\./g,"").replace(",","."); const n=parseFloat(s); return isNaN(n)?null:Math.round(n*100)/100; };
 function toast(m){const t=document.createElement("div");t.className="toast";t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
@@ -322,7 +322,7 @@ function showErr(m){const e=$("#errNote"); e.hidden=!m; e.textContent=m||"";}
 
 const LIST_LABELS={pazar:"Pazar Yeri",tur:"İptal/İade",kaynak:"Kaynak",neden:"İptal/İade Nedeni",not:"Not seçenekleri"};
 const LIST_KEYS=Object.keys(LIST_LABELS);
-const EDITABLE=["siparis_no","pazar_yeri","tur","kaynak","neden","urun_adi","adet","birim_fiyat","excel_tarihi","siparis_tarihi","not_secim","not_metin","kargo_tutari"];
+const EDITABLE=["siparis_no","pazar_yeri","tur","kaynak","neden","urun_adi","adet","birim_fiyat","excel_tarihi","siparis_tarihi","not_secim","not_metin","kargo_tutari","tutar"];
 
 /* ================= durum ================= */
 const today=ymd(new Date());
@@ -561,7 +561,7 @@ function renderTable(list){
       <td>${inp("urun_adi","text","Ürün İsmi")}</td>
       <td class="num">${inp("adet","text","Adet",' inputmode="decimal"')}</td>
       <td class="num"><input type="text" inputmode="decimal" data-id="${id}" data-f="birim_fiyat" value="${r.birim_fiyat==null?"":esc(fmt2(r.birim_fiyat))}" aria-label="Birim Fiyat"></td>
-      <td class="num ro">${esc(fmt2(tutar(r)))}</td>
+      <td class="num"><input type="text" inputmode="decimal" data-id="${id}" data-f="tutar" value="${esc(fmt2(tutar(r)))}" aria-label="Tutar"></td>
       <td>${inp("excel_tarihi","date","Excel Tarihi")}</td>
       <td class="ro">${r.kaynak_tipi==="manuel"?inp("siparis_tarihi","date","Sipariş Tarihi"):esc(trDate(r.siparis_tarihi))}</td>
       <td><div class="cellstack"><select data-id="${id}" data-f="not_secim" aria-label="Not">${opts("not",r.not_secim||"","— not seçin —")}</select>${inp("not_metin","text","Serbest not",' placeholder="Serbest not…"')}</div></td>
@@ -630,10 +630,13 @@ async function save(id,patch,el){
 $("#tbody").addEventListener("change",e=>{
   const el=e.target, id=+el.dataset.id, f=el.dataset.f; if(!id||!EDITABLE.includes(f)) return;
   let v=el.value.trim();
-  if(f==="adet"||f==="birim_fiyat"||f==="kargo_tutari"){ v=parseMoney(v); }
+  if(f==="adet"||f==="birim_fiyat"||f==="kargo_tutari"||f==="tutar"){ v=parseMoney(v); }
   else if(v==="") v=null;
   if(f==="excel_tarihi"&&!v){ toast("Excel Tarihi boş olamaz"); el.value=rows.find(x=>x.id===id)?.excel_tarihi||""; return; }
-  save(id,{[f]:v},el);
+  const patch={[f]:v};
+  if(f==="adet"||f==="birim_fiyat"){ const r=rows.find(x=>x.id===id)||{}; const a=f==="adet"?v:Number(r.adet), b=f==="birim_fiyat"?v:r.birim_fiyat;
+    if(a!=null&&b!=null&&b!==""&&!isNaN(Number(b))) patch.tutar=Math.round(Number(a)*Number(b)*100)/100; }
+  save(id,patch,el);
 });
 document.addEventListener("click",async e=>{
   const t=e.target;
