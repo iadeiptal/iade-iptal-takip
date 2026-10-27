@@ -69,7 +69,7 @@ input,select{font:400 13px var(--f-body);color:var(--fg);background:var(--surfac
 .panel h2{font-family:var(--f-display);font-size:15px;font-weight:600;margin:0;padding:12px 16px;border-bottom:1px solid var(--line-soft);display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
 .panel h2 small{font:400 12px var(--f-body);color:var(--muted)}
 .tablebox{overflow:auto;max-height:72vh;border-radius:0 0 10px 10px}
-table.ledger{border-collapse:separate;border-spacing:0;width:100%;min-width:1830px}
+table.ledger{border-collapse:separate;border-spacing:0;width:100%;min-width:1740px}
 .ledger th{position:sticky;top:0;background:var(--sunk);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;padding:8px;border-bottom:1px solid var(--line);z-index:1;white-space:nowrap}
 .ledger td{padding:4px 5px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
 .ledger tr.missing td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
@@ -242,7 +242,7 @@ dialog::backdrop{background:rgba(10,15,20,.45)}
         <thead><tr>
           <th style="width:150px">Sipariş No</th><th style="width:125px">Pazar Yeri</th><th style="width:150px">İptal/İade</th>
           <th style="width:140px">Kaynak</th><th style="width:190px">İptal/İade Nedeni</th><th style="width:280px">Ürün İsmi</th>
-          <th style="width:64px;text-align:right">Adet</th><th style="width:92px;text-align:right">Birim Fiyat</th><th style="width:96px;text-align:right">Tutar</th>
+          <th style="width:64px;text-align:right">Adet</th><th style="width:96px;text-align:right">Tutar</th>
           <th style="width:128px">Excel Tarihi</th><th style="width:110px" class="sorted" title="Liste sipariş tarihine göre eskiden yeniye sıralıdır">Sipariş Tarihi</th>
           <th style="width:200px">Not</th><th style="width:104px;text-align:right">Kargo Tutarı</th><th style="width:54px"></th>
         </tr></thead>
@@ -573,8 +573,7 @@ function renderTable(list){
       <td>${sel("neden","neden",true)}</td>
       <td>${inp("urun_adi","text","Ürün İsmi")}</td>
       <td class="num">${inp("adet","text","Adet",' inputmode="decimal"')}</td>
-      <td class="num"><input type="text" inputmode="decimal" data-id="${id}" data-f="birim_fiyat" value="${r.birim_fiyat==null?"":esc(fmt2(r.birim_fiyat))}" aria-label="Birim Fiyat"></td>
-      <td class="num"><input type="text" inputmode="decimal" data-id="${id}" data-f="tutar" value="${esc(fmt2(tutar(r)))}" aria-label="Tutar"></td>
+      <td class="num"><input type="text" inputmode="decimal" data-id="${id}" data-f="tutar" value="${(r.tutar==null||r.tutar==="")&&r.birim_fiyat==null?"":esc(fmt2(tutar(r)))}" placeholder="—" aria-label="Tutar"></td>
       <td>${inp("excel_tarihi","date","Excel Tarihi")}</td>
       <td class="ro">${r.kaynak_tipi==="manuel"?inp("siparis_tarihi","date","Sipariş Tarihi"):esc(trDate(r.siparis_tarihi))}</td>
       <td><div class="cellstack"><select data-id="${id}" data-f="not_secim" aria-label="Not">${opts("not",r.not_secim||"","— not seçin —")}</select>${inp("not_metin","text","Serbest not",' placeholder="Serbest not…"')}</div></td>
@@ -583,7 +582,7 @@ function renderTable(list){
   }).join("");
   const sumAdet=list.reduce((s,r)=>s+(Number(r.adet)||0),0), sumTutar=list.reduce((s,r)=>s+tutar(r),0), sumKargo=list.reduce((s,r)=>s+(Number(r.kargo_tutari)||0),0);
   $("#tfoot").innerHTML= list.length ? `<tr><td colspan="6"><span class="lbl">Genel toplam · ${list.length} satır</span></td>
-    <td class="num">${esc(sumAdet.toLocaleString("tr-TR"))}</td><td></td><td class="num">${esc(money(sumTutar))}</td>
+    <td class="num">${esc(sumAdet.toLocaleString("tr-TR"))}</td><td class="num">${esc(money(sumTutar))}</td>
     <td colspan="3"></td><td class="num">${esc(money(sumKargo))}</td><td></td></tr>` : "";
   const e=$("#tableEmpty");
   if(list.length){ e.hidden=true; return; }
@@ -700,12 +699,12 @@ $("#btnExport").addEventListener("click",()=>{
   if(typeof XLSX==="undefined"){ toast("Excel kütüphanesi yüklenemedi"); return; }
   const list=view==="ayarlar"?rows:filtered();
   const toD=s=>s?new Date(+s.slice(0,4),+s.slice(5,7)-1,+s.slice(8,10)):"";
-  const aoa=[["Sipariş Numarası","Pazar Yeri","İptal/İade","Kaynak","İptal/İade Nedeni","Ürün İsmi","Adet","Birim Fiyat","Fiyat","Excel Tarihi","Sipariş Tarihi","Not","Kargo Tutarı","XML Durumu"]]
-    .concat(list.map(r=>[r.siparis_no||"",r.pazar_yeri||"",r.tur||"",r.kaynak||"",r.neden||"",r.urun_adi||"",r.adet??"",r.birim_fiyat??"",Math.round(tutar(r)*100)/100,toD(r.excel_tarihi),toD(r.siparis_tarihi),[r.not_secim,r.not_metin].filter(Boolean).join(" - "),r.kargo_tutari??"",r.kaynak_tipi==="manuel"?"Manuel":r.kaynak_tipi==="excel"?("Excel · "+(r.xml_durum||"")):(r.xml_durum||"")]));
+  const aoa=[["Sipariş Numarası","Pazar Yeri","İptal/İade","Kaynak","İptal/İade Nedeni","Ürün İsmi","Adet","Tutar","Excel Tarihi","Sipariş Tarihi","Not","Kargo Tutarı","XML Durumu"]]
+    .concat(list.map(r=>[r.siparis_no||"",r.pazar_yeri||"",r.tur||"",r.kaynak||"",r.neden||"",r.urun_adi||"",r.adet??"",Math.round(tutar(r)*100)/100,toD(r.excel_tarihi),toD(r.siparis_tarihi),[r.not_secim,r.not_metin].filter(Boolean).join(" - "),r.kargo_tutari??"",r.kaynak_tipi==="manuel"?"Manuel":r.kaynak_tipi==="excel"?("Excel · "+(r.xml_durum||"")):(r.xml_durum||"")]));
   const ws=XLSX.utils.aoa_to_sheet(aoa,{cellDates:true,dateNF:"dd.mm.yyyy"});
-  const T=["TOPLAM","","","","","",list.reduce((s,r)=>s+(Number(r.adet)||0),0),"",Math.round(list.reduce((s,r)=>s+tutar(r),0)*100)/100,"","","",Math.round(list.reduce((s,r)=>s+(Number(r.kargo_tutari)||0),0)*100)/100,""];
+  const T=["TOPLAM","","","","","",list.reduce((s,r)=>s+(Number(r.adet)||0),0),Math.round(list.reduce((s,r)=>s+tutar(r),0)*100)/100,"","","",Math.round(list.reduce((s,r)=>s+(Number(r.kargo_tutari)||0),0)*100)/100,""];
   XLSX.utils.sheet_add_aoa(ws,[T],{origin:-1});
-  ws["!cols"]=[16,14,14,16,30,40,6,10,10,12,12,30,12,12].map(w=>({wch:w}));
+  ws["!cols"]=[16,14,14,16,30,40,6,12,12,12,30,12,12].map(w=>({wch:w}));
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sayfa1");
   const name= view==="gunluk"?`Iade-Iptal ${trDate(day)}.xlsx`:`Iade-Iptal ${MONTHS[+month.slice(5)-1]} ${month.slice(0,4)}.xlsx`;
   XLSX.writeFile(wb,name);
