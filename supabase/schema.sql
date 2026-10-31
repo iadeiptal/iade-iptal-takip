@@ -235,3 +235,6 @@ create policy kayit_ekle on public.kayitlar for insert to authenticated
 
 -- Sipariş başına tek satır: satır tutarı ayrı saklanır (27.10.2026)
 alter table public.kayitlar add column if not exists tutar numeric;
+
+-- Müşteri adı (31.10.2026)
+alter table public.kayitlar add column if not exists musteri_adi text;

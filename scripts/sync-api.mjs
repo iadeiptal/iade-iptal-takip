@@ -59,6 +59,7 @@ export function satirlariUret(siparisler, { kodlar, pazarKodlari, bugun }) {
     const ortak = {
       kaynak_tipi: "otomatik", siparis_no: sno, pazar_yeri: pazar, siparis_tarihi: siparisTarihi,
       xml_durum: kodlar[kod] || `Durum ${kod}`, excel_tarihi: excelTarihi,
+      musteri_adi: [metin(s.firstname), metin(s.lastname)].filter(Boolean).join(" ") || metin(s.invoice_fullname) || metin(s.ship_fullname) || null,
       _alternatif: [metin(s.platform_reference_no), metin(s.supplier_id)].filter((x) => x && x !== sno),
     };
     const kalemler = Array.isArray(s.order_product) ? s.order_product : [];
@@ -144,11 +145,11 @@ async function main() {
 
     // Sistemde zaten olan siparişleri bul (sipariş no ya da pazaryeri referans no ile)
     const aranan = [...new Set(satirlar.flatMap((r) => [r.siparis_no, ...r._alternatif]))];
-    const mevcut = new Set();
+    const mevcut = new Set(), musterisiz = new Set();
     for (let i = 0; i < aranan.length; i += 150) {
-      const { data, error } = await db.from("kayitlar").select("siparis_no").in("siparis_no", aranan.slice(i, i + 150));
+      const { data, error } = await db.from("kayitlar").select("siparis_no, musteri_adi").in("siparis_no", aranan.slice(i, i + 150));
       if (error) throw error;
-      data.forEach((d) => mevcut.add(d.siparis_no));
+      data.forEach((d) => { mevcut.add(d.siparis_no); if (!d.musteri_adi) musterisiz.add(d.siparis_no); });
     }
     const yeni = satirlar
       .filter((r) => !mevcut.has(r.siparis_no) && !r._alternatif.some((a) => mevcut.has(a)))
@@ -158,6 +159,19 @@ async function main() {
       if (error) throw error;
     }
     console.log(`Yeni eklenen satır: ${yeni.length} (${new Set(yeni.map((r) => r.siparis_no)).size} sipariş)`);
+
+    // Tabloda zaten olan ama müşteri adı boş siparişlere SADECE müşteri adını yaz (başka alana dokunulmaz)
+    let tamamlanan = 0;
+    for (const r of satirlar) {
+      if (!r.musteri_adi) continue;
+      for (const no of [r.siparis_no, ...r._alternatif]) {
+        if (!musterisiz.has(no)) continue;
+        const { error } = await db.from("kayitlar").update({ musteri_adi: r.musteri_adi }).eq("siparis_no", no).is("musteri_adi", null);
+        if (error) throw error;
+        musterisiz.delete(no); tamamlanan++;
+      }
+    }
+    if (tamamlanan) console.log(`Müşteri adı tamamlanan sipariş: ${tamamlanan}`);
     await db.from("senkron_log").insert({ basarili: true, siparis: taranan, eslesen: taranan, yeni_satir: yeni.length, mesaj: "API" });
   } catch (e) {
     console.error("Senkron hatası:", e?.message || e);
